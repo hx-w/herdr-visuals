@@ -1,0 +1,23 @@
+{
+  "name": "herdr-visuals",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Mermaid, math and local image previews through Herdr's Kitty graphics proxy",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "setup": "playwright install chromium --no-shell",
+    "test": "node --test test/*.test.mjs",
+    "check": "node --check src/viewer.mjs && node --check src/launch.mjs && npm test",
+    "demo": "node src/viewer.mjs --file examples/geometry.md"
+  },
+  "dependencies": {
+    "katex": "0.18.7",
+    "mermaid": "11.17.2",
+    "playwright": "1.63.0",
+    "smol-toml": "1.8.0",
+    "string-width": "8.2.2"
+  }
+}
