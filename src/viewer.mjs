@@ -73,7 +73,7 @@ async function poll() {
       model.resetSource(); selection = false; resetView();
     }
     sessionIdentity = identity;
-    sourceLabel = `${pane.label || path.basename(pane.foreground_cwd || pane.cwd || 'Session')} · ${pane.pane_id}`;
+    sourceLabel = pane.label || path.basename(pane.foreground_cwd || pane.cwd || 'Session');
     if (!selection) {
       const value = await reader.read(pane);
       if (sourcePane !== expectedSource || selection) return;
