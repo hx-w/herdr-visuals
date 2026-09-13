@@ -27,7 +27,7 @@ async function notifyViewer(recordPath, message) {
 async function main() {
   if (process.env.HERDR_ENV !== '1') throw new Error('Visuals must be launched inside Herdr.');
   const context = JSON.parse(process.env.HERDR_PLUGIN_CONTEXT_JSON || '{}');
-  if (process.argv.includes('--example')) context.selected_text = await fs.readFile(new URL('../examples/geometry.md', import.meta.url), 'utf8');
+  if (process.argv.includes('--example')) context.selected_text = await fs.readFile(new URL('../examples/overview.md', import.meta.url), 'utf8');
   if ((context.selected_text || '').length > 150000) throw new Error('Selected text exceeds the 150,000 character limit.');
   const current = context.focused_pane_id
     ? (await rpc('pane.get', { pane_id: context.focused_pane_id })).pane

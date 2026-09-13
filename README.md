@@ -59,11 +59,24 @@ binding, preserves other settings, backs up the file, and refuses conflicts.
 | `j` / `k`, arrow keys | Scroll vertically / pan horizontally in preview |
 | `+` / `-` | Zoom |
 | `0` | Fit the complete diagram to the pane width |
+| `g` | Open the containing answer with this item highlighted |
 | `s` | Toggle rendered / original source |
 | `y` | Copy original source (macOS pbcopy, Linux wl-copy or xclip) |
 | `e` | Export matching PNG and Markdown to `~/Downloads/herdr-visuals/` |
 | `q` / Escape | Close preview |
 | `?` | Show / hide keyboard help |
+
+Press `g` on an item to open its containing answer with the item highlighted.
+Use `j`/`k`, Page Up/Down, or Home/End to read it; `g` or Escape returns to the
+preview. Selected text and Markdown files open their own context. Context stays
+bound to the captured item and is cleared on source/session changes. No
+conversation content is written to disk.
+
+This version does not scroll the source terminal. Herdr 0.9.0 exposes pane-wide
+search and scrolling, but no session-scoped terminal range or atomic
+session-identity guard. A pane can contain multiple sessions, so matching terminal
+text alone cannot reliably identify the item's original location. Visuals reads
+only the bound transcript and uses its message identity and line number instead.
 
 Wide diagrams start at readable size and can be panned; `0` gives an overview.
 The preview uses a neutral light palette and renders at twice CSS resolution
@@ -87,7 +100,7 @@ selected by the user. Press `r` to return to the session.
   Relative links resolve against the source session's working directory; `~/`
   and `file://` links also work. Angle-bracket Markdown destinations preserve spaces.
 
-For example, `[Scan](</path/upper scan.png>)` appears as an image in Visuals.
+For example, `[Chart](</path/sample chart.png>)` appears as an image in Visuals.
 Images use the same navigation, filtering, pinning, zoom/pan and export controls.
 Animated formats are captured as a static preview. HTTP image URLs are not
 downloaded automatically. Missing or unsupported files show an explicit error.
@@ -141,7 +154,7 @@ node scripts/bind-key.mjs
 herdr server reload-config
 ```
 
-`npm run check` exercises the supplied geometry example with real Chromium,
+`npm run check` exercises the supplied preview example with real Chromium,
 Mermaid and KaTeX, including graph structure, fraction/aligned math layout,
 raw-source errors, transcript boundaries, and pin/follow behavior. Rendered
 test images go to ignored `test-output/`. CI runs the same checks on Linux.

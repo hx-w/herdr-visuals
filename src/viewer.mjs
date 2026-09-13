@@ -10,13 +10,15 @@ import { extract, extractSelection, digest } from './extract.mjs';
 import { SourceReader } from './source.mjs';
 import { PreviewModel } from './model.mjs';
 import { Renderer } from './render.mjs';
+import { answerContext, paneIdentity } from './navigation.mjs';
 
 const model = new PreviewModel(), renderer = new Renderer(), reader = new SourceReader();
+let contextView = null, navigating = false;
 let sourcePane = process.env.HERDR_VISUALS_SOURCE, origin = '', sourceLabel = '', notice = '';
 let raw = false, list = false, help = false, search = null, zoom = 1, x = 0, y = 0, fitDiagram = false;
 let stopping = false, drawing = false, dirty = true, polling = false, request = 0, selection = false;
 let lastImageKey, metrics, timer, hasImage = false, exporting = false, sessionIdentity;
-let viewRevision = 0;
+let viewRevision = 0, sourceGeneration = 0;
 let commandServer, pendingCommand;
 const paneId = process.env.HERDR_PANE_ID;
 const fileArg = process.argv.indexOf('--file');
@@ -33,6 +35,22 @@ function line(row, text, color = '') {
   process.stdout.write(`\x1b[${row};1H\x1b[2K${color}${fit(text, (process.stdout.columns || 80) - 1)}\x1b[0m`);
 }
 function resetView() { x = 0; y = 0; zoom = 1; lastImageKey = null; dirty = true; viewRevision++; }
+function resetSource() { sourceGeneration++; model.resetSource(); contextView = null; resetView(); }
+function contextRows(context, width) {
+  if (context.wrappedWidth === width) return context.wrapped;
+  const result = [];
+  context.lines.forEach((text, index) => {
+    let part = '', columns = 0;
+    for (const char of safe(text)) {
+      const size = stringWidth(char);
+      if (columns + size > width && part) { result.push({ text: part, index }); part = ''; columns = 0; }
+      part += char; columns += size;
+    }
+    result.push({ text: part, index });
+  });
+  context.wrappedWidth = width; context.wrapped = result;
+  return result;
+}
 async function clearImage() {
   if (hasImage) await rpc('pane.graphics.clear', { pane_id: paneId, layer_id: 'visuals' }).catch(() => {});
   hasImage = false;
@@ -53,12 +71,13 @@ async function poll() {
       if (record.request && record.request !== request) {
         request = record.request;
         if (!model.pinned || sourcePane !== record.source) {
-          if (sourcePane !== record.source || record.selection || selection) { model.resetSource(); resetView(); }
+          if (sourcePane !== record.source || record.selection || selection) resetSource();
           if (sourcePane !== record.source) sessionIdentity = undefined;
           sourcePane = record.source || sourcePane;
           selection = !!record.selection;
           if (selection) {
-            model.messages = [{ id: 'selection', blocks: extractSelection(record.selection, record.cwd) }];
+            model.messages = [{ id: 'selection', text: record.selection,
+              blocks: extractSelection(record.selection, record.cwd).map(b => ({ ...b, messageId: 'selection' })) }];
             model.follow = false; origin = 'Selected text';
           }
         } else notice = 'Pinned. Press r to resume this session.';
@@ -66,17 +85,19 @@ async function poll() {
     }
     if (!sourcePane) throw new Error('No source pane. Open Visuals from a Codex pane.');
     const expectedSource = sourcePane;
+    const expectedGeneration = sourceGeneration;
     const { pane } = await rpc('pane.get', { pane_id: expectedSource });
-    if (sourcePane !== expectedSource) return;
-    const identity = `${pane.terminal_id}:${pane.agent_session?.agent || pane.agent || ''}:${pane.agent_session?.value || ''}`;
+    if (sourcePane !== expectedSource || sourceGeneration !== expectedGeneration) return;
+    const identity = paneIdentity(pane);
     if (sessionIdentity !== undefined && sessionIdentity !== identity) {
-      model.resetSource(); selection = false; resetView();
+      resetSource(); selection = false;
     }
     sessionIdentity = identity;
     sourceLabel = pane.label || path.basename(pane.foreground_cwd || pane.cwd || 'Session');
     if (!selection) {
+      const readGeneration = sourceGeneration;
       const value = await reader.read(pane);
-      if (sourcePane !== expectedSource || selection) return;
+      if (sourcePane !== expectedSource || selection || sourceGeneration !== readGeneration) return;
       origin = value.origin + (value.limited ? ' · partial history' : '');
       if (model.update(value.messages)) dirty = true;
     }
@@ -91,20 +112,32 @@ async function draw() {
     line(1, ` VISUALS   ${model.pinned ? 'PINNED' : model.follow ? 'LIVE' : 'BROWSING'}   ${sourceLabel}`, '\x1b[1;38;2;52;91;116m');
     line(2, ` ${model.history ? 'This session' : 'Latest answer'} · ${model.filter} · ${model.items.length} items${model.pending ? ` · ${model.pending} new answer(s) — r to refresh` : ''}`);
     line(3, ` ${model.current ? `${model.index + 1}/${model.items.length}  ${model.current.title}` : 'No diagrams, equations or image paths in this answer.'}`);
-    line(4, ` ${origin}${model.query ? ` · search: ${model.query}` : ''}`, '\x1b[2m');
+    line(4, contextView ? ` Answer context · highlighted item · line ${contextView.start + 1}` : ` ${origin}${model.query ? ` · search: ${model.query}` : ''}`, '\x1b[2m');
     line(rows - 2, search !== null ? ` Search: ${search}_` : ` ${notice || '[ ] items  l list  f type  h scope  / search'}`);
-    line(rows - 1, ' p pin  r live  s source  +/- zoom  0 fit  ? help');
-    line(rows, ' arrows pan  y copy  e export  q / Esc close', '\x1b[2m');
+    line(rows - 1, contextView ? ' j/k scroll  g / Esc return to preview  ? help' : ' g go to answer  p pin  r live  s source  ? help');
+    line(rows, ' +/- zoom  0 fit  y copy  e export  q close', '\x1b[2m');
     if (rows < 12 || cols < 28 || help || list || search !== null || !model.current) {
       await clearImage();
       for (let row = 5; row < rows - 2; row++) line(row, '');
       if (help) {
-        ['Controls — this session only', '[ / ] or b / n: previous / next item', 'l: item list; j/k select; Enter opens', 'f: all / Mermaid / math / images', 'h: session records / latest answer', '/: search this session; Enter confirms', 'p: pin; r: resume this session', 'j/k and arrows: scroll / pan', '+/-: zoom; 0: fit; s: original source', 'y: copy source; e: export PNG + Markdown', '?: close help; q / Escape: close preview'].slice(0, rows - 8).forEach((text, i) => line(i + 6, ' ' + text));
+        ['Controls — this session only', '[ / ] or b / n: previous / next item', 'l: item list; j/k select; Enter opens', 'g: go to answer; g/Esc returns from context', 'f: all / Mermaid / math / images', 'h: session records / latest answer', '/: search this session; Enter confirms', 'p: pin; r: resume this session', 'j/k and arrows: scroll / pan', '+/-: zoom; 0: fit; s: original source', 'y: copy source; e: export PNG + Markdown', '?: close help; q / Escape: close preview'].slice(0, rows - 8).forEach((text, i) => line(i + 6, ' ' + text));
       } else if (list || search !== null) {
         const start = Math.max(0, model.index - Math.floor((rows - 9) / 2));
         model.items.slice(start, start + rows - 8).forEach((b, i) => line(i + 6,
           ` ${b.id === model.current?.id ? '>' : ' '} ${start + i + 1}. ${b.type.toUpperCase()}  ${b.title}`, b.id === model.current?.id ? '\x1b[1m' : ''));
       } else line(6, rows < 12 || cols < 28 ? ' Enlarge this pane to preview.' : ' h: previous answers   r: latest   q: close');
+      return;
+    }
+    if (contextView) {
+      await clearImage();
+      const wrapped = contextRows(contextView, cols - 9), height = rows - 7;
+      if (contextView.viewOffset === undefined) contextView.viewOffset = Math.max(0, wrapped.findIndex(row => row.index === contextView.start) - 3);
+      contextView.viewOffset = Math.max(0, Math.min(contextView.viewOffset, Math.max(0, wrapped.length - height)));
+      for (let i = 0; i < height; i++) {
+        const row = wrapped[contextView.viewOffset + i];
+        const marked = row && row.index >= contextView.start && row.index <= contextView.end;
+        line(i + 5, row ? `${marked ? '>' : ' '} ${String(row.index + 1).padStart(4)} ${row.text}` : '', marked ? '\x1b[1;38;2;52;91;116m' : '');
+      }
       return;
     }
     // Probe on every changed frame to adapt to terminal DPI and resized clients.
@@ -121,7 +154,7 @@ async function draw() {
       // Clear text from a previously open index before placing the image.
       for (let row = 5; row < rows - 2; row++) line(row, '');
       const frame = await renderer.render(block, { width, height, zoom, x, y, source: raw, fit: fitDiagram });
-      if (stopping || revision !== viewRevision || block.id !== model.current?.id || help || list || search !== null) { dirty = true; return; }
+      if (stopping || revision !== viewRevision || block.id !== model.current?.id || contextView || help || list || search !== null) { dirty = true; return; }
       x = frame.x; y = frame.y;
       await rpc('pane.graphics.set', { pane_id: paneId, layer_id: 'visuals', format: 'png',
         image_width: frame.imageWidth, image_height: frame.imageHeight, data_base64: frame.png.toString('base64'),
@@ -163,7 +196,36 @@ async function keypress(text, key = {}) {
   }
   notice = '';
   if (text === '?') { help = !help; dirty = true; return; }
+  if ((contextView || navigating) && (key.name === 'escape' || key.name === 'g')) { contextView = null; help = false; resetView(); return; }
+  if (contextView && ['j', 'down', 'k', 'up', 'pagedown', 'pageup', 'home', 'end'].includes(key.name)) {
+    const amount = ['pagedown', 'pageup'].includes(key.name) ? Math.max(1, (process.stdout.rows || 30) - 9) : 1;
+    contextView.viewOffset = key.name === 'home' ? 0 : key.name === 'end' ? Number.MAX_SAFE_INTEGER :
+      (contextView.viewOffset || 0) + (['k', 'up', 'pageup'].includes(key.name) ? -amount : amount);
+    dirty = true; return;
+  }
   if (['q', 'escape'].includes(key.name)) return close();
+  if (key.name === 'g' && model.current && !navigating) {
+    const block = { ...model.current };
+    const capturedContext = answerContext(model.messages, block);
+    if (!capturedContext) { notice = 'Answer context is unavailable for this item.'; dirty = true; return; }
+    model.follow = false; list = false; help = false; resetView();
+    if (file || selection) { contextView = capturedContext; notice = file ? 'Showing the source file context.' : 'Showing the selected text context.'; return; }
+    const expectedPane = sourcePane, expectedIdentity = sessionIdentity, revision = viewRevision;
+    navigating = true; notice = 'Locating answer…';
+    const valid = () => !stopping && viewRevision === revision && sourcePane === expectedPane && sessionIdentity === expectedIdentity && !pendingCommand;
+    try {
+      // Validate the bound identity before revealing a cached answer: it must
+      // never be revealed after the bound pane has switched sessions.
+      const { pane } = await rpc('pane.get', { pane_id: expectedPane });
+      if (!valid()) return;
+      if (paneIdentity(pane) !== expectedIdentity) { resetSource(); notice = 'Source session changed. Refreshing records.'; return; }
+      contextView = capturedContext; dirty = true;
+      notice = 'Showing the containing answer.';
+    } catch (error) { if (valid()) { contextView = null; notice = `Cannot verify source session. ${error.message}`; } }
+    finally { navigating = false; dirty = true; }
+    return;
+  }
+  if (contextView && (['n', 'b', 'l', 'f', 'h', 'r', 's'].includes(key.name) || text === '[' || text === ']' || text === '/')) contextView = null;
   if (text === ']' || key.name === 'n' || (list && ['down', 'j'].includes(key.name))) { model.move(1); resetView(); }
   else if (text === '[' || key.name === 'b' || (list && ['up', 'k'].includes(key.name))) { model.move(-1); resetView(); }
   else if (key.name === 'return' && list) { list = false; resetView(); }
@@ -173,8 +235,9 @@ async function keypress(text, key = {}) {
   else if (text === '/') { search = ''; list = true; model.history = true; model.follow = false; }
   else if (key.name === 'p' && !model.pinned) model.pin();
   else if (key.name === 'r' || (key.name === 'p' && model.pinned)) {
-    if (selection) model.resetSource();
+    if (selection) resetSource();
     else model.resume();
+    contextView = null;
     selection = false;
     model.query = ''; list = false; resetView(); await poll();
   }

@@ -60,9 +60,9 @@ export function extractSelection(text, cwd) {
   const blocks = extract(text, 'selection', cwd);
   if (blocks.length) return blocks;
   if (/^\s*(?:flowchart|graph|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|mindmap|timeline|gitGraph|journey|xychart)\b/.test(text)) {
-    return extract('```mermaid\n' + text + '\n```');
+    return extract('```mermaid\n' + text + '\n```', 'selection', cwd).map(b => ({ ...b, line: 1, raw: text }));
   }
   // Explicit selection can opt into raw math; automatic discovery never does.
-  if (/\\[a-zA-Z]+|[_^{}=]/.test(text)) return extract('$$\n' + text + '\n$$');
+  if (/\\[a-zA-Z]+|[_^{}=]/.test(text)) return extract('$$\n' + text + '\n$$', 'selection', cwd).map(b => ({ ...b, line: 1, raw: text }));
   return [];
 }

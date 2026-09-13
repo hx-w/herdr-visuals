@@ -1,6 +1,6 @@
 id = "hx-w.visuals"
 name = "Visuals"
-version = "0.1.0"
+version = "0.1.1"
 description = "Preview Mermaid, LaTeX and local images through Herdr's Kitty graphics proxy."
 min_herdr_version = "0.9.0"
 platforms = ["macos", "linux"]
@@ -20,7 +20,7 @@ command = ["node", "src/launch.mjs"]
 [[actions]]
 id = "example"
 title = "Visuals example"
-description = "Preview the bundled geometry diagram and equations."
+description = "Preview the bundled sample diagram and equations."
 command = ["node", "src/launch.mjs", "--example"]
 
 [[panes]]

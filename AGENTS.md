@@ -3,6 +3,7 @@
 - `npm run check` is the required verification command. It includes real rendering.
 - Keep package.json, package-lock.json, and herdr-plugin.toml versions synchronized.
 - Never commit session transcripts, exports, host paths, tokens, or test-output images.
+- Examples must use generic fictional content, with no dental, clinical, or internal project material.
 - Read only the exact Codex session attached to the selected Herdr pane. Do not guess by cwd.
 - Never follow focus to another session. Scope history/search to the bound session and clear records/pins on explicit source or session identity changes.
 - Keep Mermaid strict, KaTeX trust disabled, and browser network/file access restricted.

@@ -10,14 +10,14 @@ import { Renderer } from '../src/render.mjs';
 import { resolveImage, imageReferences, readImage } from '../src/images.mjs';
 import { spawnSync } from 'node:child_process';
 
-const example = await fs.readFile(new URL('../examples/geometry.md', import.meta.url), 'utf8');
+const example = await fs.readFile(new URL('../examples/overview.md', import.meta.url), 'utf8');
 
-test('provided geometry example keeps graph labels, equations, and order', () => {
+test('provided preview example keeps graph labels, equations, and order', () => {
   const blocks = extract(example);
   assert.deepEqual(blocks.map(b => b.type), ['mermaid', 'math', 'math', 'math']);
-  assert.match(blocks[0].source, /仍有违反/);
-  assert.match(blocks[1].source, /\\frac\{1\}\{2\}/);
-  assert.equal(blocks[3].title, 'H 的展开式');
+  assert.match(blocks[0].source, /需要调整/);
+  assert.match(blocks[1].source, /\\frac\{1\}\{n\}/);
+  assert.equal(blocks[3].title, '二项式展开');
   assert.match(blocks[3].source, /\\begin\{aligned\}/);
 });
 
@@ -28,14 +28,14 @@ test('automatic detection ignores ordinary code and incomplete streamed blocks',
   assert.equal(extract('\\[\nx^2').length, 0);
   assert.equal(extract('$$x^2$$')[0].source, 'x^2');
   assert.equal(extractSelection('flowchart LR\nA-->B')[0].type, 'mermaid');
-  assert.equal(extractSelection('H=KM^{-1}K')[0].type, 'math');
+  assert.equal(extractSelection('a^2+b^2=c^2')[0].type, 'math');
 });
 
 test('image references preserve path spaces and resolve against the source cwd', () => {
-  const text = '[Scan](</tmp/upper scan (1).png>)\n![View](assets/view.webp)\n`./mesh.png`\n/Users/me/result.jpg\nhttps://example.com/private.png';
+  const text = '[Chart](</tmp/sample chart (1).png>)\n![View](assets/view.webp)\n`./mesh.png`\n/Users/me/result.jpg\nhttps://example.com/private.png';
   const blocks = extract(text, 'answer', '/project');
   assert.equal(blocks.length, 4); assert.ok(blocks.every(b => b.type === 'image'));
-  assert.equal(blocks[0].source, '/tmp/upper scan (1).png');
+  assert.equal(blocks[0].source, '/tmp/sample chart (1).png');
   assert.equal(resolveImage(blocks[1].source, blocks[1].cwd), '/project/assets/view.webp');
   assert.equal(resolveImage('file:///tmp/a%20b.png'), '/tmp/a b.png');
   assert.equal(imageReferences('[a](/tmp/a.png)')[0].source, '/tmp/a.png');
@@ -108,9 +108,9 @@ test('real Mermaid and KaTeX rendering produces nonempty graph and mathematical 
     assert.equal(await renderer.page.locator('svg .node').count(), 6);
     assert.equal(await renderer.page.locator('svg .flowchart-link').count(), 6);
     await fs.writeFile(new URL('diagram.png', out), graph.png);
-    const imagePath = path.join(path.dirname(new URL(out).pathname), 'test-output', 'scan with spaces.png');
+    const imagePath = path.join(path.dirname(new URL(out).pathname), 'test-output', 'chart with spaces.png');
     await fs.writeFile(imagePath, graph.png);
-    const imageBlock = extract(`[Scan](<${imagePath}>)`)[0];
+    const imageBlock = extract(`[Chart](<${imagePath}>)`)[0];
     const imageFrame = await renderer.render(imageBlock, { width: 850, height: 500 });
     assert.equal(imageFrame.error, '');
     assert.equal(await renderer.page.locator('#content img').evaluate(el => el.naturalWidth), graph.imageWidth);
@@ -124,7 +124,7 @@ test('real Mermaid and KaTeX rendering produces nonempty graph and mathematical 
     const formula = await renderer.render(blocks[1], { width: 850, height: 500 });
     assert.equal(formula.error, '');
     assert.ok(await renderer.page.locator('math mfrac').count() > 0);
-    assert.match(await renderer.page.locator('math annotation').textContent(), /u_a/);
+    assert.match(await renderer.page.locator('math annotation').textContent(), /\\bar\{x\}/);
     await fs.writeFile(new URL('equation.png', out), formula.png);
     const aligned = await renderer.render(blocks[3], { width: 850, height: 500 });
     assert.equal(aligned.error, ''); assert.ok(await renderer.page.locator('math mtable mtr').count() >= 3);

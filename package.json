@@ -1,6 +1,6 @@
 {
   "name": "herdr-visuals",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "Mermaid, math and local image previews through Herdr's Kitty graphics proxy",
@@ -11,7 +11,7 @@
     "setup": "playwright install chromium --no-shell",
     "test": "node --test test/*.test.mjs",
     "check": "node --check src/viewer.mjs && node --check src/launch.mjs && npm test",
-    "demo": "node src/viewer.mjs --file examples/geometry.md"
+    "demo": "node src/viewer.mjs --file examples/overview.md"
   },
   "dependencies": {
     "katex": "0.18.7",
