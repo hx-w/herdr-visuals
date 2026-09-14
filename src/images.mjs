@@ -40,10 +40,15 @@ export async function readImage(reference, cwd) {
   try {
     const stat = await handle.stat();
     if (!stat.isFile()) throw new Error('Image path is not a regular file.');
-    if (stat.size > 32 * 1024 * 1024) throw new Error('Image exceeds the 32 MiB preview limit.');
-    const buffer = Buffer.alloc(Math.min(stat.size + 1, 32 * 1024 * 1024 + 1));
-    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-    if (bytesRead > 32 * 1024 * 1024 || bytesRead > stat.size) throw new Error('Image changed while loading. Try again.');
+    const buffer = Buffer.alloc(stat.size + 1);
+    let bytesRead = 0;
+    while (bytesRead < buffer.length) {
+      const part = await handle.read(buffer, bytesRead, Math.min(1024 * 1024, buffer.length - bytesRead), bytesRead);
+      if (!part.bytesRead) break;
+      bytesRead += part.bytesRead;
+    }
+    const after = await handle.stat();
+    if (bytesRead !== stat.size || after.size !== stat.size || after.mtimeMs !== stat.mtimeMs) throw new Error('Image changed while loading. Try again.');
     const bytes = buffer.subarray(0, bytesRead);
     const head = bytes.subarray(0, 512).toString('utf8');
     let mime;

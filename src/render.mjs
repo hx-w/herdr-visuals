@@ -5,6 +5,9 @@ import { chromium } from 'playwright';
 import { readImage } from './images.mjs';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+// Herdr limits decoded inline image data to 512 KiB. Its Base64 representation
+// plus the RPC envelope also fits the separate 1 MiB request limit.
+const PREVIEW_PNG_BYTES = 512 * 1024;
 const template = `<!doctype html><html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="stylesheet" href="/katex/katex.min.css">
@@ -76,7 +79,6 @@ export class Renderer {
                 const image = document.createElement('img'); image.src = dataURL;
                 image.style.display = 'block'; target.replaceChildren(image);
                 await image.decode();
-                if (image.naturalWidth * image.naturalHeight > 40_000_000) throw new Error('Image exceeds the 40 megapixel preview limit.');
                 const scale = Math.min(1, (width - 44) / image.naturalWidth, (height - 100) / image.naturalHeight);
                 image.style.width = `${Math.max(1, image.naturalWidth * scale * zoom)}px`;
                 image.style.height = 'auto';
@@ -112,10 +114,45 @@ export class Renderer {
         return { x: scrollX, y: scrollY, width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight,
           error: document.querySelector('#error').textContent };
       }, { x, y });
-      const png = await this.page.screenshot({ animations: 'disabled', timeout: 12000 });
-      return { png, width, height, ...metrics, imageWidth: width * 2, imageHeight: height * 2 };
+      const original = await this.page.screenshot({ animations: 'disabled', timeout: 12000 });
+      const png = await this.fitPreview(original);
+      return { png, width, height, ...metrics, imageWidth: png.readUInt32BE(16), imageHeight: png.readUInt32BE(20) };
     } catch (error) { await this.newPage(); throw error; }
     finally { clearTimeout(timer); }
+  }
+  async fitPreview(png) {
+    if (png.length <= PREVIEW_PNG_BYTES) return png;
+    // Resize the captured viewport, not the document: zoom, pan, and export
+    // retain their original coordinates, layout, and resolution.
+    const base64 = await this.page.evaluate(async ({ source, maxBytes }) => {
+      const bytes = Uint8Array.from(atob(source), c => c.charCodeAt(0));
+      const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+      try {
+        let scale = 1, size = bytes.length;
+        const canvas = document.createElement('canvas');
+        for (;;) {
+          scale *= Math.min(0.8, Math.sqrt(maxBytes / size) * 0.9);
+          canvas.width = Math.max(1, Math.floor(bitmap.width * scale));
+          canvas.height = Math.max(1, Math.floor(bitmap.height * scale));
+          const ctx = canvas.getContext('2d');
+          ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+          const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+          if (!blob) throw new Error('Could not resize the preview image.');
+          size = blob.size;
+          if (size <= maxBytes) {
+            return new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result.split(',')[1]);
+              reader.onerror = () => reject(new Error('Could not encode the preview image.'));
+              reader.readAsDataURL(blob);
+            });
+          }
+          if (canvas.width === 1 && canvas.height === 1) throw new Error('Preview could not fit the transport limit.');
+        }
+      } finally { bitmap.close(); }
+    }, { source: png.toString('base64'), maxBytes: PREVIEW_PNG_BYTES });
+    return Buffer.from(base64, 'base64');
   }
   async exportPNG() {
     const size = await this.page.evaluate(() => ({ width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }));

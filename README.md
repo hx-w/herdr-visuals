@@ -102,6 +102,13 @@ selected by the user. Press `r` to return to the session.
 
 For example, `[Chart](</path/sample chart.png>)` appears as an image in Visuals.
 Images use the same navigation, filtering, pinning, zoom/pan and export controls.
+Large images automatically fit the preview area. Complex previews are downsampled
+in memory to fit Herdr's 512 KiB inline image limit and 1 MiB socket request
+limit, preserving the complete viewport.
+Zoom and pan still work; adaptation does not change the source file or exported
+image resolution. Valid images are no longer rejected solely for exceeding
+32 MiB or 40 megapixels; decoding remains subject to browser and available memory.
+
 Animated formats are captured as a static preview. HTTP image URLs are not
 downloaded automatically. Missing or unsupported files show an explicit error.
 

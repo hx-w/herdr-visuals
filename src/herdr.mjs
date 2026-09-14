@@ -15,12 +15,16 @@ export function stateDir() {
 export function rpc(method, params = {}, timeout = 6000) {
   return new Promise((resolve, reject) => {
     const id = randomUUID();
+    const message = JSON.stringify({ id, method, params });
+    if (Buffer.byteLength(message) > 1024 * 1024) {
+      return reject(new Error(`${method}: request exceeds Herdr's 1 MiB limit`));
+    }
     const socket = net.createConnection(socketPath());
     let buffer = '';
     const finish = (error, value) => { socket.destroy(); error ? reject(error) : resolve(value); };
     socket.setTimeout(timeout, () => finish(new Error(`${method}: Herdr timed out`)));
-    socket.on('error', reject);
-    socket.on('connect', () => socket.write(JSON.stringify({ id, method, params }) + '\n'));
+    socket.on('error', error => finish(new Error(`${method}: ${error.message}`, { cause: error })));
+    socket.on('connect', () => socket.write(message + '\n'));
     socket.setEncoding('utf8');
     socket.on('data', data => {
       buffer += data;
