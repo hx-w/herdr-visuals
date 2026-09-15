@@ -87,7 +87,7 @@ test('real viewer lists embedded images, opens image context and clears them on 
   });
   await new Promise(resolve => server.listen(socketPath, resolve));
   const child = spawn('python3', [path.join(root, 'test/pty-runner.py'), process.execPath, path.join(root, 'src/viewer.mjs')], {
-    env: { ...process.env, HERDR_SOCKET_PATH: socketPath, HERDR_PANE_ID: 'viewer', HERDR_VISUALS_SOURCE: 'source',
+    env: { ...process.env, HERDR_ENV: '1', HERDR_SOCKET_PATH: socketPath, HERDR_PANE_ID: 'viewer', HERDR_VISUALS_SOURCE: 'source',
       HERDR_VISUALS_CODEX_HOME: dir, HERDR_VISUALS_RECORD: '' }, stdio: ['pipe', 'pipe', 'pipe'],
   });
   let output = ''; child.stdout.on('data', data => { output += data; }); child.stderr.on('data', data => { output += data; });
