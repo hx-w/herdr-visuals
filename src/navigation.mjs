@@ -9,6 +9,6 @@ export function answerContext(messages, block) {
   if (!message?.text) return null;
   const lines = message.text.replace(/\r\n/g, '\n').split('\n');
   const start = Math.max(0, Math.min(lines.length - 1, (block.line || 1) - 1));
-  return { blockId: block.id, title: block.title, lines, start,
+  return { blockId: block.id, title: block.title, kind: message.kind, lines, start,
     end: Math.min(lines.length - 1, start + (block.raw || block.source).split('\n').length - 1) };
 }

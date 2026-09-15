@@ -42,7 +42,7 @@ binding, preserves other settings, backs up the file, and refuses conflicts.
   different source clears all old items and pins before reading the new session.
   Starting a new session in the same pane also clears the previous records.
 - All visual records in this session are the default scope, with the newest
-  item selected. `h` switches to the latest answer only. New answers do not
+  item selected. `h` switches to the latest turn's answers and images. New answers do not
   replace an item while browsing, panning, zooming, or pinning; `r` resumes.
 - There is no background discovery or automatic reopening while closed.
 
@@ -52,7 +52,7 @@ binding, preserves other settings, backs up the file, and refuses conflicts.
 | `l` | Show / hide the item list |
 | `j` / `k`, Enter in list | Select an item and open it |
 | `f` | Cycle all / diagrams / equations / images |
-| `h` | Toggle this session's records / latest answer |
+| `h` | Toggle this session's records / latest turn's answers and images |
 | `/` | Search only this session by title, context, or source; Enter confirms |
 | `p` | Pin the current item / resume following |
 | `r` | Resume live updates within this session |
@@ -101,6 +101,12 @@ selected by the user. Press `r` to return to the session.
   and `file://` links also work. Angle-bracket Markdown destinations preserve spaces.
 
 For example, `[Chart](</path/sample chart.png>)` appears as an image in Visuals.
+Images displayed by Codex tools (including `Viewed Image` and images returned
+through an `exec` call) also appear, even without a link in the final answer.
+Visuals uses the embedded image content in the bound conversation, so these
+previews keep working if the original temporary file is gone. Tool code is never
+executed or searched for image paths. Embedded images can be exported with `e`;
+`g` shows image context, and `y` explains how to export instead of copying Base64.
 Images use the same navigation, filtering, pinning, zoom/pan and export controls.
 Large images automatically fit the preview area. Complex previews are downsampled
 in memory to fit Herdr's 512 KiB inline image limit and 1 MiB socket request
@@ -129,10 +135,11 @@ show the source and the parser error instead of silently changing the input.
 Use `aligned` inside math delimiters for multi-line derivations.
 
 Codex is resolved using the exact `agent_session` ID reported by Herdr. The
-adapter reads assistant final messages from that session's JSONL transcript;
-prompts, tool outputs, commentary and internal reasoning are excluded. It never
+adapter reads assistant final messages and typed images in tool results from that
+session's JSONL transcript. Prompts, tool text, commentary and internal reasoning
+are excluded. It never
 chooses a different session just because it has the same working directory.
-History is bounded to the last 16 MiB and 300 assistant messages. If the JSONL
+History is bounded to the last 16 MiB and 300 answer/image records. If the JSONL
 file cannot be located, the UI shows an unavailable state. It never scans terminal
 scrollback, because that can contain older sessions. Explicit selected-text preview
 remains available. Automatic history discovery currently supports Codex only.

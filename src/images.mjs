@@ -6,6 +6,19 @@ import { constants } from 'node:fs';
 
 export const IMAGE_EXT = /\.(?:png|jpe?g|webp|gif|bmp|avif|svg)$/i;
 
+// Only image content blocks may supply embedded pixels. Never turn tool text,
+// arbitrary JSON strings, or remote/file URLs into automatic image sources.
+export function imageDataURL(content) {
+  if (!['input_image', 'output_image', 'image'].includes(content?.type)) return null;
+  const url = typeof content.image_url === 'string' ? content.image_url : content.image_url?.url;
+  const data = url || (typeof content.data === 'string' && typeof content.mimeType === 'string'
+    ? `data:${content.mimeType};base64,${content.data}` : null);
+  if (typeof data !== 'string' || !/^data:image\/(?:png|jpeg|webp|gif|bmp|avif|svg\+xml);base64,/i.test(data)) return null;
+  const encoded = data.slice(data.indexOf(',') + 1);
+  if (!encoded.length || encoded.length % 4 || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) return null;
+  return data;
+}
+
 export function imageReferences(line) {
   const refs = [], occupied = [];
   const add = (source, label, start, end) => {

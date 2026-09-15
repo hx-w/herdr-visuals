@@ -110,9 +110,9 @@ async function draw() {
   const cols = process.stdout.columns || 80, rows = process.stdout.rows || 30;
   try {
     line(1, ` VISUALS   ${model.pinned ? 'PINNED' : model.follow ? 'LIVE' : 'BROWSING'}   ${sourceLabel}`, '\x1b[1;38;2;52;91;116m');
-    line(2, ` ${model.history ? 'This session' : 'Latest answer'} · ${model.filter} · ${model.items.length} items${model.pending ? ` · ${model.pending} new answer(s) — r to refresh` : ''}`);
+    line(2, ` ${model.history ? 'This session' : 'Latest turn'} · ${model.filter} · ${model.items.length} items${model.pending ? ` · ${model.pending} new answer/image record(s) — r to refresh` : ''}`);
     line(3, ` ${model.current ? `${model.index + 1}/${model.items.length}  ${model.current.title}` : 'No diagrams, equations or image paths in this answer.'}`);
-    line(4, contextView ? ` Answer context · highlighted item · line ${contextView.start + 1}` : ` ${origin}${model.query ? ` · search: ${model.query}` : ''}`, '\x1b[2m');
+    line(4, contextView ? ` ${contextView.kind === 'image' ? 'Image' : 'Answer'} context · highlighted item · line ${contextView.start + 1}` : ` ${origin}${model.query ? ` · search: ${model.query}` : ''}`, '\x1b[2m');
     line(rows - 2, search !== null ? ` Search: ${search}_` : ` ${notice || '[ ] items  l list  f type  h scope  / search'}`);
     line(rows - 1, contextView ? ' j/k scroll  g / Esc return to preview  ? help' : ' g go to answer  p pin  r live  s source  ? help');
     line(rows, ' +/- zoom  0 fit  y copy  e export  q close', '\x1b[2m');
@@ -120,7 +120,7 @@ async function draw() {
       await clearImage();
       for (let row = 5; row < rows - 2; row++) line(row, '');
       if (help) {
-        ['Controls — this session only', '[ / ] or b / n: previous / next item', 'l: item list; j/k select; Enter opens', 'g: go to answer; g/Esc returns from context', 'f: all / Mermaid / math / images', 'h: session records / latest answer', '/: search this session; Enter confirms', 'p: pin; r: resume this session', 'j/k and arrows: scroll / pan', '+/-: zoom; 0: fit; s: original source', 'y: copy source; e: export PNG + Markdown', '?: close help; q / Escape: close preview'].slice(0, rows - 8).forEach((text, i) => line(i + 6, ' ' + text));
+        ['Controls — this session only', '[ / ] or b / n: previous / next item', 'l: item list; j/k select; Enter opens', 'g: show context; g/Esc returns to preview', 'f: all / Mermaid / math / images', 'h: session records / latest turn', '/: search this session; Enter confirms', 'p: pin; r: resume this session', 'j/k and arrows: scroll / pan', '+/-: zoom; 0: fit; s: original source', 'y: copy source; e: export PNG + Markdown', '?: close help; q / Escape: close preview'].slice(0, rows - 8).forEach((text, i) => line(i + 6, ' ' + text));
       } else if (list || search !== null) {
         const start = Math.max(0, model.index - Math.floor((rows - 9) / 2));
         model.items.slice(start, start + rows - 8).forEach((b, i) => line(i + 6,
@@ -220,7 +220,7 @@ async function keypress(text, key = {}) {
       if (!valid()) return;
       if (paneIdentity(pane) !== expectedIdentity) { resetSource(); notice = 'Source session changed. Refreshing records.'; return; }
       contextView = capturedContext; dirty = true;
-      notice = 'Showing the containing answer.';
+      notice = capturedContext.kind === 'image' ? 'Showing the image context.' : 'Showing the containing answer.';
     } catch (error) { if (valid()) { contextView = null; notice = `Cannot verify source session. ${error.message}`; } }
     finally { navigating = false; dirty = true; }
     return;
@@ -250,6 +250,7 @@ async function keypress(text, key = {}) {
   else if (key.name === 'right') { x += 100; model.follow = false; }
   else if (key.name === 'left') { x = Math.max(0, x - 100); model.follow = false; }
   else if (key.name === 'y' && model.current) {
+    if (model.current.imageData) { notice = 'This image is embedded in the conversation. Use e to export it.'; dirty = true; return; }
     const value = model.current.raw || model.current.source;
     const candidates = process.platform === 'darwin' ? [['pbcopy', []]] : [['wl-copy', []], ['xclip', ['-selection', 'clipboard']]];
     let copied = false;

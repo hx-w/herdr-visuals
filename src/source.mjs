@@ -2,6 +2,15 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { extract, digest } from './extract.mjs';
+import { imageDataURL } from './images.mjs';
+
+function outputImages(output) {
+  if (typeof output === 'string') {
+    try { output = JSON.parse(output); } catch { return []; }
+  }
+  const content = Array.isArray(output) ? output : output?.content;
+  return Array.isArray(content) ? content.map(imageDataURL).filter(Boolean) : [];
+}
 
 export function parseRollout(text, { cwd } = {}) {
   const messages = [];
@@ -11,6 +20,18 @@ export function parseRollout(text, { cwd } = {}) {
     try { row = JSON.parse(line); } catch { continue; } // append-in-progress or tail starts mid-record
     const p = row.payload;
     if (['session_meta', 'turn_context'].includes(row.type) && typeof p?.cwd === 'string') cwd = p.cwd;
+    if (row.type === 'response_item' && ['function_call_output', 'custom_tool_call_output'].includes(p?.type)) {
+      outputImages(p.output).forEach((imageData, index) => {
+        const id = digest(`${row.timestamp}:${p.call_id || ''}:${index}:${imageData}`);
+        const title = `Image ${index + 1}`;
+        const text = `${title}\nEmbedded image displayed in this conversation.`;
+        messages.push({ id, turn, kind: 'image', text, timestamp: row.timestamp, blocks: [{
+          id: `${id}:image`, messageId: id, type: 'image', source: title, title,
+          context: 'Conversation image', imageData, line: 1, raw: text, cwd,
+        }] });
+      });
+      continue;
+    }
     if (row.type !== 'response_item' || p?.type !== 'message') continue;
     if (p.role === 'user') { turn++; continue; }
     if (p.role !== 'assistant' || (p.phase && !['final', 'final_answer'].includes(p.phase))) continue;

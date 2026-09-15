@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
-import { readImage } from './images.mjs';
+import { readImage, imageDataURL } from './images.mjs';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 // Herdr limits decoded inline image data to 512 KiB. Its Base64 representation
@@ -55,9 +55,16 @@ export class Renderer {
     await this.page.setViewportSize({ width, height });
     let loaded, imageError;
     if (block.type === 'image' && !source) {
-      try { loaded = await readImage(block.source, block.cwd); }
+      try {
+        if (block.imageData) {
+          const dataURL = imageDataURL({ type: 'input_image', image_url: block.imageData });
+          if (!dataURL) throw new Error('Invalid embedded image.');
+          loaded = { dataURL, revision: block.id };
+        } else loaded = await readImage(block.source, block.cwd);
+      }
       catch (error) { imageError = error.message; }
     }
+    const { imageData: _imageData, ...renderBlock } = block;
     const key = JSON.stringify([block.id, width, height, zoom, source, fit, loaded?.revision, imageError]);
     let timer;
     try {
@@ -104,7 +111,7 @@ export class Renderer {
               document.querySelector('#error').textContent = `Could not render: ${error.message}`;
               showSource();
             }
-          }, { block, width, height, zoom, source, fit, dataURL: loaded?.dataURL, imageError }),
+          }, { block: renderBlock, width, height, zoom, source, fit, dataURL: loaded?.dataURL, imageError }),
           new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Rendering exceeded 12 seconds')), 12000); }),
         ]);
         this.key = key;

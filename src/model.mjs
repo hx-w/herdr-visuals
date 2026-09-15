@@ -4,7 +4,9 @@ export class PreviewModel {
     this.selectedId = null; this.pinned = null; this.follow = true; this.pending = 0;
   }
   get items() {
-    const messages = this.history ? this.messages : this.messages.slice(-1);
+    const latest = this.messages.at(-1);
+    const messages = this.history ? this.messages : Number.isInteger(latest?.turn)
+      ? this.messages.filter(m => m.turn === latest.turn) : this.messages.slice(-1);
     return messages.flatMap(m => m.blocks).filter(b =>
       (this.filter === 'all' || b.type === this.filter) &&
       (!this.query || `${b.title}\n${b.context}\n${b.source}`.toLowerCase().includes(this.query.toLowerCase())));
