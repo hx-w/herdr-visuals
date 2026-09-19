@@ -1,14 +1,38 @@
 # Herdr Visuals
 
-Mermaid diagrams, LaTeX display equations, and referenced local images in a Herdr split pane. Open with
-**prefix+v**, browse or pin an item, and keep working in Codex. Rendering stays
-on your machine; no web server, cloud renderer, API key, or model call is used.
+Preview Mermaid diagrams, LaTeX equations, and local images beside your Codex
+conversation in a Herdr split pane. Open with **prefix+v**, browse or pin an item,
+and keep working. Rendering runs locally, without a cloud renderer, API key, or
+model call.
+
+- Browse diagrams, equations, image links, and images displayed by Codex tools.
+- Zoom, pan, inspect the original source, or jump to the containing answer.
+- Search within the bound session and export the selected item as PNG and Markdown.
+
+## Screenshots
+
+Visuals running in Herdr: browsing a workflow image, viewing equations, and
+selecting an item from the session list. The workflow and equations use
+[the bundled fictional example](examples/overview.md).
+
+**Workflow image preview**
+
+![Visuals in Herdr displaying a fictional data-processing workflow with navigation and zoom controls](docs/screenshots/mermaid.png)
+
+**Equation image preview**
+
+![Visuals in Herdr displaying three aligned binomial identities](docs/screenshots/equations.png)
+
+**Session item list**
+
+![Visuals item list with five images and the workflow image selected](docs/screenshots/item-list.png)
+
+Press `l` to open the list, `j` / `k` to select an item, and Enter to view it.
 
 ## Install
 
 Requires Herdr 0.9.0+, Node.js 22+, npm, and a graphics-capable terminal such as
 Ghostty, kitty, or WezTerm. Herdr's `[terminal].kitty_graphics` must be enabled.
-Private repository access uses your normal Git authentication.
 
 ```sh
 herdr plugin install hx-w/herdr-visuals
@@ -33,6 +57,15 @@ description = "Visual previews"
 the prefix itself. From a local checkout, `node scripts/bind-key.mjs` adds this
 binding, preserves other settings, backs up the file, and refuses conflicts.
 
+Try the bundled diagram and three equations:
+
+```sh
+herdr plugin action invoke hx-w.visuals.example
+```
+
+Use `[` / `]` to browse, `0` to fit a wide diagram, and `s` to inspect its source.
+To preview your conversation, open Visuals from the Codex pane with **prefix+v**.
+
 ## Interaction
 
 - **prefix+v**: open beside the current pane; focus an existing preview in the
@@ -41,9 +74,9 @@ binding, preserves other settings, backs up the file, and refuses conflicts.
   another agent does not read that agent's history. Opening explicitly from a
   different source clears all old items and pins before reading the new session.
   Starting a new session in the same pane also clears the previous records.
-- All visual records in this session are the default scope, with the newest
-  item selected. `h` switches to the latest turn's answers and images. New answers do not
-  replace an item while browsing, panning, zooming, or pinning; `r` resumes.
+- The preview starts with this session's records and the newest item selected.
+  `h` switches to the latest turn's answers and images. Browsing, panning, zooming,
+  or pinning holds the current item; `r` resumes live updates.
 - There is no background discovery or automatic reopening while closed.
 
 | Key | Action |
@@ -80,11 +113,7 @@ only the bound transcript and uses its message identity and line number instead.
 
 Wide diagrams start at readable size and can be panned; `0` gives an overview.
 The preview uses a neutral light palette and renders at twice CSS resolution
-for high-DPI terminals. To try the included diagram and equations:
-
-```sh
-herdr plugin action invoke hx-w.visuals.example
-```
+for high-DPI terminals.
 
 Selected text, when supplied by Herdr's invocation context, takes precedence
 over transcript discovery. This also accepts bare Mermaid or raw math explicitly
@@ -137,8 +166,7 @@ Use `aligned` inside math delimiters for multi-line derivations.
 Codex is resolved using the exact `agent_session` ID reported by Herdr. The
 adapter reads assistant final messages and typed images in tool results from that
 session's JSONL transcript. Prompts, tool text, commentary and internal reasoning
-are excluded. It never
-chooses a different session just because it has the same working directory.
+are excluded. A shared working directory is never used to select another session.
 History is bounded to the last 16 MiB and 300 answer/image records. If the JSONL
 file cannot be located, the UI shows an unavailable state. It never scans terminal
 scrollback, because that can contain older sessions. Explicit selected-text preview
