@@ -1,7 +1,7 @@
 // Terminal rows are not conversation IDs. Never search a pane's entire history.
 export const paneIdentity = pane => JSON.stringify([
-  pane.pane_id, pane.terminal_id, pane.agent_session?.agent,
-  pane.agent_session?.kind, pane.agent_session?.value,
+  pane.pane_id, pane.terminal_id, pane.agent, pane.agent_session?.agent,
+  pane.agent_session?.kind, pane.agent_session?.value, pane.source_session,
 ]);
 
 export function answerContext(messages, block) {

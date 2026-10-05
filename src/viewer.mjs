@@ -7,7 +7,7 @@ import stringWidth from 'string-width';
 import net from 'node:net';
 import { rpc } from './herdr.mjs';
 import { extract, extractSelection, digest } from './extract.mjs';
-import { SourceReader } from './source.mjs';
+import { SourceReader } from './sources/index.mjs';
 import { PreviewModel } from './model.mjs';
 import { Renderer } from './render.mjs';
 import { answerContext, paneIdentity } from './navigation.mjs';
@@ -88,7 +88,7 @@ async function poll() {
         } else notice = 'Pinned. Press r to resume this session.';
       }
     }
-    if (!sourcePane) throw new Error('No source pane. Open Visuals from a Codex pane.');
+    if (!sourcePane) throw new Error('No source pane. Open Visuals from a supported agent pane.');
     const expectedSource = sourcePane;
     const expectedGeneration = sourceGeneration;
     const response = await rpc('pane.get', { pane_id: expectedSource });

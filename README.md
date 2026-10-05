@@ -1,11 +1,11 @@
 # Herdr Visuals
 
-Preview Mermaid diagrams, LaTeX equations, and local images beside your Codex
-conversation in a Herdr split pane. Open with **prefix+v**, browse or pin an item,
-and keep working. Rendering runs locally, without a cloud renderer, API key, or
-model call.
+Preview Mermaid diagrams, LaTeX equations, and local images beside your omp,
+Codex, Claude Code or pi conversation in a Herdr split pane. Open with **prefix+v**,
+browse or pin an item, and keep working. Rendering runs locally, without a cloud
+renderer, API key, or model call.
 
-- Browse diagrams, equations, image links, and images displayed by Codex tools.
+- Browse diagrams, equations, image links, and typed images returned by agent tools.
 - Zoom, pan, inspect the original source, or jump to the containing answer.
 - Search within the bound session and export the selected item as PNG and Markdown.
 
@@ -34,8 +34,18 @@ Press `l` to open the list, `j` / `k` to select an item, and Enter to view it.
 Requires Herdr 0.9.2+ (0.9.3 recommended), Node.js 22+, npm, and a
 graphics-capable terminal such as Ghostty, kitty, or WezTerm. Herdr's `[terminal].kitty_graphics` must be enabled.
 
+Install **0.2.0** for omp, Codex, Claude Code and pi support:
+
 ```sh
-herdr plugin install hx-w/herdr-visuals --ref v0.1.7
+herdr plugin install hx-w/herdr-visuals --ref v0.2.0
+```
+
+For development, link a local checkout instead:
+
+```sh
+npm ci --ignore-scripts
+npm run setup
+herdr plugin link "$PWD"
 ```
 
 Installation runs `npm ci --ignore-scripts` and downloads Playwright's pinned
@@ -64,7 +74,7 @@ herdr plugin action invoke hx-w.visuals.example
 ```
 
 Use `[` / `]` to browse, `0` to fit a wide diagram, and `s` to inspect its source.
-To preview your conversation, open Visuals from the Codex pane with **prefix+v**.
+To preview your conversation, open Visuals from the source agent pane with **prefix+v**.
 
 For Codex versions that use a shared app-server daemon, put `thread-id` first in
 the existing `[tui].status_line` array in your Codex `config.toml`. Keep your other
@@ -81,6 +91,35 @@ session binding. If an existing pane is disconnected, run `/status` in that pane
 and bind its displayed Session ID with
 `herdr pane report-agent-session <pane-id> --source herdr:codex --agent codex --agent-session-id <session-id>`.
 Never substitute an ID found by matching the working directory.
+
+### omp, pi and Claude Code bindings
+
+Visuals uses Herdr's built-in integrations; it installs no additional hook.
+Check `herdr integration status`. If your integration is absent, install the
+matching one and restart that agent pane so it loads the hook:
+
+```sh
+herdr integration install omp
+herdr integration install pi
+herdr integration install claude
+```
+
+Run only the command for the agent you use. omp and pi must report an exact
+absolute session-file path. ID-only or unsaved sessions cannot be discovered
+automatically. Custom profiles/session directories work when Herdr reports
+their actual file; Visuals never selects a session by project, title or recency.
+An explicit binding, using the file known from that exact session, is also possible:
+
+```sh
+herdr pane report-agent-session <pane-id> --source herdr:omp --agent omp --agent-session-path /absolute/path/session.jsonl
+herdr pane report-agent-session <pane-id> --source herdr:pi --agent pi --agent-session-path /absolute/path/session.jsonl
+herdr pane report-agent-session <pane-id> --source herdr:claude --agent claude --agent-session-path /absolute/path/session.jsonl
+```
+
+Claude Code also accepts Herdr's exact session UUID. The adapter constructs one
+filename using the official SDK's canonical project-directory encoding and
+validates that file's session ID. A missing file or mismatched worktree fails
+closed; no alternative session or project directory is searched.
 
 ## Interaction
 
@@ -195,12 +234,40 @@ starts, resumes, or modifies threads. Older sessions use their exact JSONL file.
 An active history API failure shows an error instead of silently showing a stale
 JSONL snapshot.
 
-The adapter reads assistant final messages, typed tool images, viewed image paths,
+The Codex adapter reads assistant final messages, typed tool images, viewed image paths,
 and completed image-generation records. Prompts, tool text, commentary and
 internal reasoning are excluded. History keeps the newest 1,000 API items within
 a 16 MiB budget (the final complete item may exceed it), then at most 300
 answer/image records. Partial history is labeled. Explicit selected-text preview
-remains available. Automatic session reading currently supports Codex only.
+remains available.
+
+omp and pi use the current v3 JSONL tree format; older journal versions are not
+migrated or supported. Visuals follows the last persisted leaf's `parentId`
+ancestry, not physical adjacency or branch-summary hints. Only
+successful assistant final text and typed output images are shown. omp's
+externalized images load the referenced content-addressed blob from one agent
+directory; generated images use retained payloads rather than temporary copies.
+The journal does not persist pointer-only branch navigation, so the preview
+changes branch when the agent next appends a record, not immediately on `/tree`.
+
+Claude Code follows `uuid`/`parentUuid` main-session ancestry, excluding sidechains,
+subagents, prompts, thinking, tool logs and raw streaming deltas. Complete
+assistant blocks sharing an API message ID are grouped; a tool-use block
+suppresses that group's text. Claude can persist text before the later tool
+block arrives, so that text is reclassified on the next append rather than
+claimed as certified whole-turn completion. Typed base64 tool-result images
+must match a tool call on the selected branch.
+
+File-backed sources retain at most 300 visual-bearing entry payloads under a
+16 MiB budget, allowing one complete oversized image; resolved omp blob pixels
+also count toward the snapshot budget. Ignored whitespace and known Claude
+tool commentary do not consume retained answer history. Ancestry remains in a
+compact in-memory index; its size is linear in journal entries. Unchanged
+polls reuse the snapshot; appended complete lines are decoded incrementally.
+Reads of each file are serialized across polling and answer navigation.
+Truncation, inode/session replacement, option changes or changed prefix/tail
+guards rebuild the parser. These readers consume append-only agent journals,
+not arbitrarily edited files. In-progress JSONL and UTF-8 fragments are buffered.
 
 If Visuals says **Codex session is not connected**, Herdr has not supplied the
 source pane's session identity. Configure the Codex footer as described above or
@@ -222,7 +289,48 @@ Optional environment variables:
 | Variable | Purpose |
 | --- | --- |
 | `HERDR_VISUALS_CODEX_HOME` | Custom Codex home; otherwise `CODEX_HOME`, then `~/.codex` |
+| `HERDR_VISUALS_OMP_HOME` | omp agent directory for blobs; otherwise `PI_CODING_AGENT_DIR`, managed session-file hierarchy, then `~/.omp/agent` |
+| `CLAUDE_CONFIG_DIR` | Claude Code config directory for exact-UUID file resolution; otherwise `~/.claude` |
 | `HERDR_VISUALS_EXPORT_DIR` | Export parent directory; otherwise `~/Downloads` |
+
+## Source architecture
+
+```text
+src/
+  sources/
+    index.mjs          Adapter registry and fail-closed coordination
+    contract.mjs       SourceSnapshot/SourceAdapter contract and binding helpers
+    files.mjs          Read-only streaming, incremental decode and file cache
+    codex/
+      index.mjs        Exact thread binding and live footer identity
+      history.mjs      Restricted read-only app-server transport
+      rollout.mjs      Codex record normalization
+    claude/
+      index.mjs        Exact path/UUID binding
+      format.mjs       Main-session ancestry and complete-block normalization
+    omp/index.mjs      omp binding, blob storage and generated-image policy
+    pi/
+      index.mjs        pi binding
+      format.mjs       Shared omp/pi ancestry and typed-content normalization
+  viewer.mjs           TUI and captured source-pane lifecycle
+  model.mjs            Navigation, filtering, pin/follow state
+  render.mjs           Local Chromium/Mermaid/KaTeX rendering
+  graphics.mjs         Kitty transport and terminal input
+  launch.mjs           Herdr action and pane lifecycle
+```
+
+Adapters expose `agent`, `label`, `resolvePane(pane)`, `read(pane)` and optional
+`close()`. They never query focus or select unrelated sessions. `resolvePane`
+adds the persisted session identity; pane/terminal, agent, reference kind/value
+and that identity form the viewer's invalidation key. `read` returns the uniform
+`SourceSnapshot` of answer/image records, origin, partial-history flag and issue.
+The viewer has no source-format branches.
+
+To add an agent, implement its exact binding and normalization in
+`src/sources/<agent>/`, register it in `sources/index.mjs`, and add fictional
+fixtures for isolation, appends, replacement, errors and real PTY rendering.
+The 0.2.0 cutover removes the old mixed source modules without compatibility
+re-exports. This cutover adds no dependency, daemon or model API credential.
 
 ## Development and verification
 
@@ -237,8 +345,10 @@ herdr server reload-config
 
 `npm run check` exercises the supplied preview example with real Chromium,
 Mermaid and KaTeX, including graph structure, fraction/aligned math layout,
-raw-source errors, transcript boundaries, and pin/follow behavior. Rendered
-test images go to ignored `test-output/`. CI runs the same checks on Linux.
+raw-source errors, all four session adapters, typed images, append/branch
+boundaries, same-path replacement and pin/follow behavior. Real PTY scenarios
+decode the complete Kitty PNG output. Rendered test images go to ignored
+`test-output/`. CI runs the same checks on Linux.
 
 For manual acceptance, open the example, navigate through its four items,
 filter, pin, browse history, zoom/pan, toggle source, export, resize, then close
@@ -247,4 +357,4 @@ that exporting immediately after changing items exports the selected item.
 
 Uninstall with `herdr plugin uninstall hx-w.visuals` (or `plugin unlink` for a
 local checkout), and remove only the `hx-w.visuals.open` keybinding. Existing
-exports and the config backup remain yours. No Codex files are modified.
+exports and the config backup remain yours. No agent session files are modified.

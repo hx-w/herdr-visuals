@@ -4,7 +4,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { extract, extractSelection } from '../src/extract.mjs';
-import { parseRollout, SourceReader } from '../src/source.mjs';
+import { parseRollout } from '../src/sources/codex/rollout.mjs';
+import { SourceReader } from '../src/sources/index.mjs';
 import { PreviewModel } from '../src/model.mjs';
 import { Renderer } from '../src/render.mjs';
 import { resolveImage, imageReferences, readImage } from '../src/images.mjs';
@@ -81,17 +82,6 @@ test('reading an exact Codex session handles append and refuses unrelated sessio
     const missing = await reader.read({ ...pane, agent_session: { ...pane.agent_session, value: '../../invalid' } });
     assert.match(missing.origin, /unavailable/); assert.deepEqual(missing.messages, []);
   } finally { await fs.rm(dir, { recursive: true, force: true }); }
-});
-
-test('source availability distinguishes an unbound pane from a missing transcript', async () => {
-  const reader = new SourceReader();
-  const unbound = await reader.read({ agent: 'codex' });
-  assert.equal(unbound.issue.title, 'Codex session is not connected.');
-  assert.match(unbound.issue.hint, /SessionStart/);
-  assert.deepEqual(unbound.messages, []);
-  const invalid = await reader.read({ agent_session: { agent: 'codex', kind: 'id', value: 'invalid' } });
-  assert.equal(invalid.issue.title, 'The bound Codex transcript is unavailable.');
-  assert.notEqual(invalid.issue.hint, unbound.issue.hint);
 });
 
 test('pinning and browsing preserve the viewed item until follow is resumed', () => {

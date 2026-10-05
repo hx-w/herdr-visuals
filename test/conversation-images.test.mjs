@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseRollout } from '../src/source.mjs';
+import { parseRollout } from '../src/sources/codex/rollout.mjs';
 import { Renderer } from '../src/render.mjs';
 import { PreviewModel } from '../src/model.mjs';
 import { answerContext } from '../src/navigation.mjs';

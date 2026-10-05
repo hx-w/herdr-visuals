@@ -3,6 +3,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
+import packageMetadata from '../../../package.json' with { type: 'json' };
 
 export const sessionID = /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i;
 const maxBytes = 16 * 1024 * 1024;
@@ -43,7 +44,7 @@ export class CodexHistory {
       });
       socket.once('open', async () => {
         try {
-          await this.request('initialize', { clientInfo: { name: 'herdr-visuals', version: '0.1.7' }, capabilities: { experimentalApi: true } });
+          await this.request('initialize', { clientInfo: { name: 'herdr-visuals', version: packageMetadata.version }, capabilities: { experimentalApi: true } });
           socket.send(JSON.stringify({ method: 'initialized' })); resolve();
         } catch (error) { reject(error); socket.close(); }
       });

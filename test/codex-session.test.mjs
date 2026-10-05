@@ -5,9 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import { WebSocketServer } from 'ws';
-import { CodexHistory, historyRows } from '../src/codex.mjs';
-import { SourceReader } from '../src/source.mjs';
-import { parseRollout } from '../src/source.mjs';
+import { CodexHistory, historyRows } from '../src/sources/codex/history.mjs';
+import { SourceReader } from '../src/sources/index.mjs';
+import { parseRollout } from '../src/sources/codex/rollout.mjs';
 
 const ids = ['019f47ac-0000-7000-8000-000000000001', '019f47ac-0000-7000-8000-000000000002'];
 const answer = text => ({ type: 'response_item', payload: { type: 'message', role: 'assistant', phase: 'final_answer', content: [{ type: 'output_text', text }] } });
